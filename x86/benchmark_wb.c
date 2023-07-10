@@ -39,7 +39,7 @@ void* threadFuncclflush(void* arg) {
     uint64_t start = __rdtsc();
     
     for (int i = 0; i < bytes; i += 64) {
-        asm volatile ("clflush (%0)" :: "r"(x));
+        asm volatile ("clflush (%0)" :: "r"(x+i));
     }
 
     asm volatile ("mfence");
@@ -77,7 +77,7 @@ void* threadFuncclflushopt(void* arg) {
     uint64_t start = __rdtsc();
     
     for (int i = 0; i < bytes; i += 64) {
-        asm volatile ("clflushopt (%0)" :: "r"(x));
+        asm volatile ("clflushopt (%0)" :: "r"(x+i));
     }
 
     asm volatile ("mfence");
@@ -97,7 +97,6 @@ void* threadFuncclwb(void* arg) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(my_cpu, &cpuset);
-    printf("theread going to %d\n", my_cpu);
     sched_setaffinity(0, sizeof(cpuset), &cpuset);
 
     int burn = 0;
@@ -116,7 +115,7 @@ void* threadFuncclwb(void* arg) {
     uint64_t start = __rdtsc();
     
     for (int i = 0; i < bytes; i += 64) {
-        asm volatile ("clwb (%0)" :: "r"(x));
+        asm volatile ("clwb (%0)" :: "r"(x+i));
     }
 
     asm volatile ("mfence");
@@ -130,7 +129,8 @@ void* threadFuncclwb(void* arg) {
     return NULL;
 }
 
-void warmup() {
+
+void warmup(int type) {
     void *x = malloc(WARMUP_BYTES);
 
     // dirty each line
@@ -141,7 +141,12 @@ void warmup() {
     // //flush
 
     for (int i = 0; i < WARMUP_BYTES; i += 64) {
-        asm volatile ("clflushopt (%0)" :: "r"(x));
+        if(type == 0)
+            asm volatile ("clflush (%0)" :: "r"(x));
+        else if(type == 1)
+            asm volatile ("clflushopt (%0)" :: "r"(x));
+        else
+            asm volatile ("clwb (%0)" :: "r"(x));
     }
 
     asm volatile ("mfence");
@@ -150,6 +155,7 @@ void warmup() {
     free(x);
 
 }
+
 
 void bench(int numThreads, int bytes, void *(*func)(void *)) {
 // Initialize thread identifiers
@@ -251,7 +257,7 @@ int main(int argc, char* argv[]) {
             
             int starter_bytes = numThreads*64;
             for (int z=0;z<WARMUP_N;z++) {
-                warmup();
+                warmup(type);
             }
 
             for(int bytes=starter_bytes;bytes<=16384;bytes*=2) {
