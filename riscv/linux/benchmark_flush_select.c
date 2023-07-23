@@ -21,7 +21,7 @@ void* threadFunc(void* arg) {
     uint64_t start = read_csr(cycle);
     
     for (int i = 0; i < bytes; i += 64) {
-        CBO_FLUSH_FN(x+i);
+        CBO_CLEAN_FN(x+i);
     }
 
     asm volatile ("fence rw, rw");
@@ -109,14 +109,14 @@ double calculate_standard_deviation(uint64_t* array, int N, double mean) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        printf("Usage: ./benchmark <num_threads> <reps for confidence>\n");
+    if (argc != 4) {
+        printf("Usage: ./benchmark <num_threads> <reps for confidence> <bytes>\n");
         return 1;
     }
 
     int numThreads = atoi(argv[1]);
     int reps = atoi(argv[2]);
-    //int sameX = atoi(argv[3]);
+    int bytes = atoi(argv[3]);
 
     printf("threads, bytes, mean, median, stddev\n");
 
@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
     else if(numThreads == 4) starter_bytes = 256;
     else if(numThreads == 8) starter_bytes = 512;
 
-    for(int bytes=starter_bytes;bytes<=16384;bytes*=2) {
+//    for(int bytes=starter_bytes;bytes<=16384;bytes*=2) {
 
         uint64_t results[reps];
 
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
 
         printf("%d, %lu, %lf, %lf, %lf\n", numThreads, bytes, mean_cycles, median_cycles, stddev_cycles);
 
-    }
+    // }
 
     return 0;
 }

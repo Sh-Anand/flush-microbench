@@ -13,7 +13,7 @@ void* threadFunc(void* arg) {
     void *x = malloc(bytes);
 
     // dirty each line
-    for (int i = 0; i < bytes; i+=8) {
+    for (int i = 0; i < bytes; i+=64) {
         *((uint64_t *) (x+i)) = i; 
     }
 
@@ -125,6 +125,7 @@ int main(int argc, char* argv[]) {
     if(numThreads == 1) starter_bytes = 64;
     else if(numThreads == 2) starter_bytes = 128;
     else if(numThreads == 4) starter_bytes = 256;
+    else if(numThreads == 8) starter_bytes = 512;
 
     for(int bytes=starter_bytes;bytes<=16384;bytes*=2) {
 

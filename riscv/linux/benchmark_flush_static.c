@@ -10,7 +10,8 @@ volatile uint64_t total_cycles = 0;
 void* threadFunc(void* arg) {
     int bytes = bytes_per_thread;
 
-    void *x = malloc(bytes);
+    uint8_t arr[bytes];
+    void *x = arr;
 
     // dirty each line
     for (int i = 0; i < bytes; i+=64) {
@@ -29,8 +30,6 @@ void* threadFunc(void* arg) {
     uint64_t end = read_csr(cycle);
     uint64_t elapsed = end - start;
     total_cycles += elapsed;
-
-    free(x);
 
     return NULL;
 }
