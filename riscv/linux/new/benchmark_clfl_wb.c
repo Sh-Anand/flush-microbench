@@ -8,11 +8,8 @@
 
 #
 int bytes_per_thread;
-volatile uint64_t total_cycles[8];
+volatile uint64_t total_cycles[0];
 
-int clean_flush = -1;
-
-volatile void *x;
 struct thread_arg {
 	int core;
 	int thread_id;
@@ -24,6 +21,8 @@ void* threadFunc(void* arg) {
 	
     int bytes = bytes_per_thread;
 
+    void *x = malloc(bytes);
+
     // dirty each line
     for (int i = 0; i < bytes; i+=8) {
         *((uint64_t *) (x+i)) = i; 
@@ -34,23 +33,11 @@ void* threadFunc(void* arg) {
     
 	uint64_t count = 0;
 	uint64_t start = read_csr(cycle);
-	if (clean_flush == 0) {
-		for (int i = 0; i < bytes; i += 8) {
-			/* test code for not implemented CLEAN 
-			double d = 100.0;
-			*((uint64_t *) (x + 1)) = (uint64_t) (d / (double)  bytes); 
-			*/
-			CBO_CLEAN_FN(x+i);
-	    }
-	    asm volatile ("fence rw, rw");
-	} else if (clean_flush = 1) {
-		for (int i = 0; i < bytes; i += 8) {
-			CBO_FLUSH_FN(x+i);
-	    }
-	    asm volatile ("fence rw, rw");
-	} else {
-		printf("what did you dooo? clean_flush = %d\n", clean_flush);
-	}
+    
+    for (int i = 0; i < bytes; i += 8) {
+        CBO_CLEAN_FN(x+i);
+    }
+    asm volatile ("fence rw, rw");
 
 	uint64_t end = read_csr(cycle);
 	count = end - start;
@@ -142,21 +129,10 @@ double calculate_standard_deviation(uint64_t* array, int N, double mean) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        printf("Usage: ./benchmark [flush, clean] <num_threads> <reps for confidence>\n");
+    if (argc != 3) {
+        printf("Usage: ./benchmark <num_threads> <reps for confidence>\n");
         return 1;
     }
-
-	/* clean == 0, flush = 1, invalid = -1 */
-	
-	if (strcmp("flush", argv[1]) == 0) {
-			clean_flush = 1;
-	} else if (strcmp("clean", argv[1]) == 0) {
-			clean_flush = 0;
-	} else {
-			printf("%s not a valid benchmark!\n", argv[1]);
-			return -1;
-	}
 
     int numThreads = atoi(argv[2]);
     int reps = atoi(argv[3]);
@@ -177,7 +153,6 @@ int main(int argc, char* argv[]) {
 			}
 			results[i] = 0;
 
-            x = malloc(bytes);
 			/* the work */
             bench(numThreads, bytes);
 			

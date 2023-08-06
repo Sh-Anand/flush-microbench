@@ -1,66 +1,38 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <pthread.h>
 #include <cflush.h>
 #include <math.h>
-#include <string.h>
 
-#
 int bytes_per_thread;
 volatile uint64_t total_cycles[8];
 
-int clean_flush = -1;
-
-volatile void *x;
-struct thread_arg {
-	int core;
-	int thread_id;
-};
-
 void* threadFunc(void* arg) {
-	struct thread_arg* ta = (struct thread_arg*) arg;
-	int tid = ta->thread_id;
-	
     int bytes = bytes_per_thread;
 
+    int threadid = *(int *)arg;
+
+    void *x = malloc(bytes);
+
     // dirty each line
-    for (int i = 0; i < bytes; i+=8) {
+    for (int i = 0; i < bytes; i+=64) {
         *((uint64_t *) (x+i)) = i; 
     }
 
     // //flush
-    //uint64_t start = read_csr(cycle);
+    uint64_t start = read_csr(cycle);
     
-	uint64_t count = 0;
-	uint64_t start = read_csr(cycle);
-	if (clean_flush == 0) {
-		for (int i = 0; i < bytes; i += 8) {
-			/* test code for not implemented CLEAN 
-			double d = 100.0;
-			*((uint64_t *) (x + 1)) = (uint64_t) (d / (double)  bytes); 
-			*/
-			CBO_CLEAN_FN(x+i);
-	    }
-	    asm volatile ("fence rw, rw");
-	} else if (clean_flush = 1) {
-		for (int i = 0; i < bytes; i += 8) {
-			CBO_FLUSH_FN(x+i);
-	    }
-	    asm volatile ("fence rw, rw");
-	} else {
-		printf("what did you dooo? clean_flush = %d\n", clean_flush);
-	}
+    for (int i = 0; i < bytes; i += 64) {
+        CBO_FLUSH_FN(x+i);
+    }
 
-	uint64_t end = read_csr(cycle);
-	count = end - start;
-    total_cycles[tid] = count;
- 
-	/*
+    asm volatile ("fence rw, rw");
+    
     uint64_t end = read_csr(cycle);
     uint64_t elapsed = end - start;
-    total_cycles += elapsed;
-	*/
+    total_cycles[threadid] += elapsed;
+
+    free(x);
 
     return NULL;
 }
@@ -71,13 +43,11 @@ void bench(int numThreads, int bytes) {
 
     bytes_per_thread = bytes/numThreads;
 
-	struct thread_arg ta[numThreads];
-
+    int threadid[numThreads];
     // Create threads
     for (int i = 0; i < numThreads; i++) {
-		ta[i].core = 0;
-		ta[i].thread_id = i;
-        if (pthread_create(&threads[i], NULL, threadFunc, &ta[i]) != 0) {
+        threadid[i] = i;
+        if (pthread_create(&threads[i], NULL, threadFunc, &threadid[i]) != 0) {
             printf("Error: Failed to create thread %d.\n", i);
             return;
         }
@@ -142,46 +112,29 @@ double calculate_standard_deviation(uint64_t* array, int N, double mean) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        printf("Usage: ./benchmark [flush, clean] <num_threads> <reps for confidence>\n");
+    if (argc != 3) {
+        printf("Usage: ./benchmark <num_threads> <reps for confidence>\n");
         return 1;
     }
 
-	/* clean == 0, flush = 1, invalid = -1 */
-	
-	if (strcmp("flush", argv[1]) == 0) {
-			clean_flush = 1;
-	} else if (strcmp("clean", argv[1]) == 0) {
-			clean_flush = 0;
-	} else {
-			printf("%s not a valid benchmark!\n", argv[1]);
-			return -1;
-	}
-
-    int numThreads = atoi(argv[2]);
-    int reps = atoi(argv[3]);
-
+    int numThreads = atoi(argv[1]);
+    int reps = atoi(argv[2]);
     //int sameX = atoi(argv[3]);
 
     printf("threads, bytes, mean, median, stddev, max, min, Q1, Q3\n");
 
-	/* for each flush size */
-    for(int bytes = numThreads*64; bytes <= 16384; bytes*=2) {
+    int starter_bytes = numThreads*64;
+
+    for(int bytes=starter_bytes;bytes<=16384;bytes*=2) {
 
         uint64_t results[reps];
-		/* inner loop of repeitions */
-        for(int i = 0; i < reps; i++) {
-			/* clear counters */
-			for (int k = 0; k < 8; ++k) {
+
+        for(int i=0;i<reps;i++) {
+			for (int k = 0; k < numThreads; ++k) {
 				total_cycles[k] = 0;
 			}
-			results[i] = 0;
-
-            x = malloc(bytes);
-			/* the work */
             bench(numThreads, bytes);
-			
-			/* find max of each thread */
+            /* find max of each thread */
 			results[i] = total_cycles[0];
 			for (int j = 1; j < numThreads; ++j) {
 				if (total_cycles[j] > total_cycles[j - 1]) {

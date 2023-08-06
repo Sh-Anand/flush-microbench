@@ -28,7 +28,7 @@ void* threadFunc(void* arg) {
         uint64_t start = read_csr(cycle);
         
         for (int i = 0; i < bytes; i += 64) {
-            CBO_FLUSH_FN(x+i);
+            // CBO_FLUSH_FN(x+i);
         }
         asm volatile ("fence rw, rw");
         
@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
     for(int i=0;i<atts;i++)
         results[i] = 0;
 
-    x = aligned_alloc(ALIGN, bytes);
+    x = malloc(bytes);
     bench(numThreads, bytes);
 
     for(int i=0;i<atts;i++)
